@@ -1,0 +1,146 @@
+[
+  {
+    "state_accuracy": {
+      "mean": 0.8172587719298245,
+      "std": 0.030724584243676148,
+      "per_fold": [
+        0.8020833333333334,
+        0.8,
+        0.8421052631578947,
+        0.7789473684210526,
+        0.8631578947368421
+      ]
+    },
+    "config": {
+      "window_size": 100,
+      "lstm_layers": 2,
+      "lstm_hidden_dim": 128,
+      "d_model": 128,
+      "nhead": 8,
+      "dim_feedforward": 512,
+      "num_transformer_layers": 2,
+      "lstm_dropout": 0.1,
+      "transformer_dropout": 0.1
+    }
+  },
+  {
+    "state_accuracy": {
+      "mean": 0.8003728070175438,
+      "std": 0.022445215612884973,
+      "per_fold": [
+        0.8229166666666666,
+        0.7684210526315789,
+        0.8105263157894737,
+        0.7789473684210526,
+        0.8210526315789474
+      ]
+    },
+    "config": {
+      "window_size": 100,
+      "lstm_layers": 2,
+      "lstm_hidden_dim": 256,
+      "d_model": 256,
+      "nhead": 8,
+      "dim_feedforward": 1024,
+      "num_transformer_layers": 6,
+      "lstm_dropout": 0.2,
+      "transformer_dropout": 0.2
+    }
+  },
+  {
+    "state_accuracy": {
+      "mean": 0.8193201754385966,
+      "std": 0.018168750462884863,
+      "per_fold": [
+        0.8229166666666666,
+        0.8105263157894737,
+        0.8315789473684211,
+        0.7894736842105263,
+        0.8421052631578947
+      ]
+    },
+    "config": {
+      "window_size": 150,
+      "lstm_layers": 3,
+      "lstm_hidden_dim": 512,
+      "d_model": 256,
+      "nhead": 8,
+      "dim_feedforward": 1024,
+      "num_transformer_layers": 2,
+      "lstm_dropout": 0.3,
+      "transformer_dropout": 0.1
+    }
+  },
+  {
+    "state_accuracy": {
+      "mean": 0.8193640350877193,
+      "std": 0.032654944709393265,
+      "per_fold": [
+        0.8020833333333334,
+        0.8210526315789474,
+        0.8631578947368421,
+        0.7684210526315789,
+        0.8421052631578947
+      ]
+    },
+    "config": {
+      "window_size": 100,
+      "lstm_layers": 2,
+      "lstm_hidden_dim": 256,
+      "d_model": 512,
+      "nhead": 16,
+      "dim_feedforward": 2048,
+      "num_transformer_layers": 4,
+      "lstm_dropout": 0.2,
+      "transformer_dropout": 0.2
+    }
+  },
+  {
+    "state_accuracy": {
+      "mean": 0.819342105263158,
+      "std": 0.0152744966957173,
+      "per_fold": [
+        0.8125,
+        0.8105263157894737,
+        0.8421052631578947,
+        0.8,
+        0.8315789473684211
+      ]
+    },
+    "config": {
+      "window_size": 200,
+      "lstm_layers": 4,
+      "lstm_hidden_dim": 512,
+      "d_model": 512,
+      "nhead": 16,
+      "dim_feedforward": 2048,
+      "num_transformer_layers": 4,
+      "lstm_dropout": 0.3,
+      "transformer_dropout": 0.3
+    }
+  },
+  {
+    "state_accuracy": {
+      "mean": 0.8277631578947368,
+      "std": 0.03604494731785326,
+      "per_fold": [
+        0.8125,
+        0.8315789473684211,
+        0.8736842105263158,
+        0.7684210526315789,
+        0.8526315789473684
+      ]
+    },
+    "config": {
+      "window_size": 150,
+      "lstm_layers": 3,
+      "lstm_hidden_dim": 384,
+      "d_model": 384,
+      "nhead": 12,
+      "dim_feedforward": 1536,
+      "num_transformer_layers": 3,
+      "lstm_dropout": 0.25,
+      "transformer_dropout": 0.25
+    }
+  }
+]

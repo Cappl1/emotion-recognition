@@ -1,0 +1,37 @@
+cross_validation:
+  n_splits: 5
+  shuffle: true
+  stratify: true
+data:
+  base_path: /home/brothen/eSEEd_extracted/
+  batch_size: 16
+  confidence_threshold: 0.8
+  max_seq_length: 30000
+  num_workers: 4
+  pin_memory: true
+  window_size: 100
+  labeling_mode: 'state'  # Add this line - can be 'dual' or 'state'
+model:
+  d_model: 128
+  dim_feedforward: 512
+  input_dim: 6
+  lstm_dropout: 0.2
+  lstm_hidden_dim: 128
+  lstm_layers: 2
+  nhead: 8
+  num_classes: 4  # Change this from 3 to 4 for state classification
+  num_transformer_layers: 2
+  transformer_dropout: 0.1
+  labeling_mode: 'state'  # Add this line - should match data.labeling_mode
+name: experiment_1
+notes: null
+training:
+  early_stopping_patience: 10
+  gradient_clip_val: 1.0
+  learning_rate: 0.0001
+  num_epochs: 50
+  scheduler_factor: 0.5
+  scheduler_patience: 5
+  seed: 42
+  warmup_epochs: 0
+  weight_decay: 1.0e-05

@@ -8,10 +8,11 @@ import pickle
 from pathlib import Path
 
 class DatasetPreprocessor:
-    def __init__(self, base_path, confidence_threshold=0.8, max_seq_length=512):
+    def __init__(self, base_path, confidence_threshold=0.8, max_seq_length=512, labeling_mode='dual'):
         self.base_path = base_path
         self.confidence_threshold = confidence_threshold
         self.max_seq_length = max_seq_length
+        self.labeling_mode = labeling_mode
         self.stats = {
             'diameter': {
                 'mean': None,
@@ -25,6 +26,7 @@ class DatasetPreprocessor:
             }
         }
         
+        # Original dual-head categorization
         self.valence_groups = {
             'NV': [1, 5, 6, 7, 8, 10],
             'MV': [3, 9],
@@ -35,22 +37,39 @@ class DatasetPreprocessor:
             'MA': [3, 9],
             'HA': [1, 5, 7, 10]
         }
+        
+        # New single-head state categorization
+        self.state_categories = {
+            'HANV': [1, 5, 7, 10],
+            'MAMV': [3, 9],
+            'LAPV': [2, 4],
+            'LANV': [6, 8]
+        }
     
-    def _get_emotion_labels(self, video_num):
-        valence_label = None
-        arousal_label = None
-        
-        for label, videos in self.valence_groups.items():
-            if video_num in videos:
-                valence_label = {'NV': 0, 'MV': 1, 'PV': 2}[label]
-                break
-        
-        for label, videos in self.arousal_groups.items():
-            if video_num in videos:
-                arousal_label = {'LA': 0, 'MA': 1, 'HA': 2}[label]
-                break
-        
-        return valence_label, arousal_label
+    def _get_labels(self, video_num):
+        """Get labels based on labeling mode."""
+        if self.labeling_mode == 'dual':
+            valence_label = None
+            arousal_label = None
+            
+            for label, videos in self.valence_groups.items():
+                if video_num in videos:
+                    valence_label = {'NV': 0, 'MV': 1, 'PV': 2}[label]
+                    break
+            
+            for label, videos in self.arousal_groups.items():
+                if video_num in videos:
+                    arousal_label = {'LA': 0, 'MA': 1, 'HA': 2}[label]
+                    break
+            
+            return valence_label, arousal_label
+        else:  # single head state classification
+            state_label = None
+            for label, videos in self.state_categories.items():
+                if video_num in videos:
+                    state_label = {'HANV': 0, 'MAMV': 1, 'LAPV': 2, 'LANV': 3}[label]
+                    break
+            return state_label
 
     def calculate_diameter_stats(self):
         """Calculate normalization statistics for pupil diameter."""
@@ -135,7 +154,19 @@ class DatasetPreprocessor:
                     continue
                 
                 video_num = int(video_folder.split('_')[-1])
-                valence_label, arousal_label = self._get_emotion_labels(video_num)
+                
+                # Get labels based on labeling mode
+                if self.labeling_mode == 'dual':
+                    valence_label, arousal_label = self._get_labels(video_num)
+                    labels = {
+                        'valence_label': valence_label,
+                        'arousal_label': arousal_label
+                    }
+                else:
+                    state_label = self._get_labels(video_num)
+                    labels = {
+                        'state_label': state_label
+                    }
                 
                 pupil_file = os.path.join(video_path, 'pupil.csv')
                 if not os.path.exists(pupil_file):
@@ -162,8 +193,7 @@ class DatasetPreprocessor:
                     sample_data = {
                         'eye0_features': eye0_features,
                         'eye1_features': eye1_features,
-                        'valence_label': valence_label,
-                        'arousal_label': arousal_label
+                        **labels  # Unpack the labels dict
                     }
                     
                     with open(cache_file, 'wb') as f:
@@ -172,8 +202,7 @@ class DatasetPreprocessor:
                     processed_samples.append({
                         'sample_id': sample_id,
                         'cache_file': str(cache_file),
-                        'valence_label': valence_label,
-                        'arousal_label': arousal_label
+                        **labels
                     })
         
         # Save metadata
@@ -221,9 +250,11 @@ class DatasetPreprocessor:
         print(f"Average retention rate: {np.mean(np.array(seq_after) / np.array(seq_before)):.2%}")
         print("=" * 50)
 
+
 class PreprocessedGazePupilDataset(Dataset):
-    def __init__(self, cache_dir):
+    def __init__(self, cache_dir, labeling_mode='dual'):
         self.cache_dir = Path(cache_dir)
+        self.labeling_mode = labeling_mode
         
         # Load metadata
         with open(self.cache_dir / 'metadata.pkl', 'rb') as f:
@@ -231,7 +262,7 @@ class PreprocessedGazePupilDataset(Dataset):
         
         self.stats = metadata['stats']
         self.samples = metadata['samples']
-    
+        
     def __len__(self):
         return len(self.samples)
     
@@ -244,13 +275,15 @@ class PreprocessedGazePupilDataset(Dataset):
         
         # Combine features from both eyes
         combined_features = np.concatenate([data['eye0_features'], data['eye1_features']], axis=1)
-        
-        # Convert to tensors
         features = torch.tensor(combined_features, dtype=torch.float32)
-        valence_label = torch.tensor(data['valence_label'], dtype=torch.long)
-        arousal_label = torch.tensor(data['arousal_label'], dtype=torch.long)
         
-        return features, valence_label, arousal_label
+        if self.labeling_mode == 'dual':
+            valence_label = torch.tensor(data['valence_label'], dtype=torch.long)
+            arousal_label = torch.tensor(data['arousal_label'], dtype=torch.long)
+            return features, valence_label, arousal_label
+        else:
+            state_label = torch.tensor(data['state_label'], dtype=torch.long)
+            return features, state_label
     
 
 

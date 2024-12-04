@@ -3,13 +3,14 @@ cross_validation:
   shuffle: true
   stratify: true
 data:
-  base_path: /Users/bastianrothenburger/Documents/eSEEd_extracted/
-  batch_size: 32
+  base_path: /home/brothen/eSEEd_extracted/
+  batch_size: 16
   confidence_threshold: 0.8
   max_seq_length: 30000
   num_workers: 2
   pin_memory: true
   window_size: 100
+  labeling_mode: 'dual'
 model:
   d_model: 128
   dim_feedforward: 512
@@ -21,7 +22,8 @@ model:
   num_classes: 3
   num_transformer_layers: 2
   transformer_dropout: 0.1
-name: experiment_1
+  labeling_mode: 'dual'
+name: valence
 notes: null
 training:
   early_stopping_patience: 10

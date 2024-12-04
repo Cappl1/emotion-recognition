@@ -17,10 +17,17 @@ class CVSplitInfo:
     fold_number: int
     train_indices: np.ndarray
     val_indices: np.ndarray
-    train_valence_dist: Dict[int, int]
-    train_arousal_dist: Dict[int, int]
-    val_valence_dist: Dict[int, int]
-    val_arousal_dist: Dict[int, int]
+    labeling_mode: str = 'dual'
+    
+    # Dual-head label distributions
+    train_valence_dist: Optional[Dict[int, int]] = None
+    train_arousal_dist: Optional[Dict[int, int]] = None
+    val_valence_dist: Optional[Dict[int, int]] = None
+    val_arousal_dist: Optional[Dict[int, int]] = None
+    
+    # State label distributions
+    train_state_dist: Optional[Dict[int, int]] = None
+    val_state_dist: Optional[Dict[int, int]] = None
 
 class CrossValidator:
     def __init__(
@@ -28,25 +35,18 @@ class CrossValidator:
         n_splits: int = 5,
         shuffle: bool = True,
         random_state: int = 42,
-        results_dir: Optional[str] = None
+        results_dir: Optional[str] = None,
+        labeling_mode: str = 'dual'
     ):
-        """
-        Initialize cross-validation handler.
-        
-        Args:
-            n_splits: Number of folds
-            shuffle: Whether to shuffle data before splitting
-            random_state: Random seed for reproducibility
-            results_dir: Directory to save CV results
-        """
         self.n_splits = n_splits
         self.shuffle = shuffle
         self.random_state = random_state
         self.results_dir = Path(results_dir) if results_dir else Path("cv_results")
         self.results_dir.mkdir(parents=True, exist_ok=True)
         self.splits = None
-        self.splits: List[CVSplitInfo] = []
+        self.labeling_mode = labeling_mode
         self.logger = self._setup_logger()
+
 
     def _setup_logger(self) -> logging.Logger:
         """Setup logging."""
@@ -97,41 +97,65 @@ class CrossValidator:
         return valence_dist, arousal_dist
 
     def analyze_class_distribution(self, dataset):
-        """Analyze class distribution in the dataset."""
-        valence_labels = []
-        arousal_labels = []
-        
-        for _, valence, arousal in dataset:
-            valence_labels.append(valence.item())
-            arousal_labels.append(arousal.item())
+        """Analyze class distribution based on labeling mode."""
+        if self.labeling_mode == 'dual':
+            valence_labels = []
+            arousal_labels = []
             
-        print("\nDataset Class Distribution:")
-        print("==========================")
-        print("\nValence Distribution:")
-        v_dist = Counter(valence_labels)
-        for label, count in sorted(v_dist.items()):
-            percentage = (count / len(valence_labels)) * 100
-            print(f"Class {label}: {count} samples ({percentage:.2f}%)")
+            for _, valence, arousal in dataset:
+                valence_labels.append(valence.item())
+                arousal_labels.append(arousal.item())
+                
+            print("\nDataset Class Distribution:")
+            print("==========================")
+            print("\nValence Distribution:")
+            v_dist = Counter(valence_labels)
+            for label, count in sorted(v_dist.items()):
+                percentage = (count / len(valence_labels)) * 100
+                print(f"Class {label}: {count} samples ({percentage:.2f}%)")
+                
+            print("\nArousal Distribution:")
+            a_dist = Counter(arousal_labels)
+            for label, count in sorted(a_dist.items()):
+                percentage = (count / len(arousal_labels)) * 100
+                print(f"Class {label}: {count} samples ({percentage:.2f}%)")
+                
+            return v_dist, a_dist
+        else:
+            state_labels = []
+            state_names = ['HANV', 'MAMV', 'LAPV', 'LANV']
             
-        print("\nArousal Distribution:")
-        a_dist = Counter(arousal_labels)
-        for label, count in sorted(a_dist.items()):
-            percentage = (count / len(arousal_labels)) * 100
-            print(f"Class {label}: {count} samples ({percentage:.2f}%)")
+            for _, state in dataset:
+                state_labels.append(state.item())
             
-        return v_dist, a_dist
+            print("\nDataset State Distribution:")
+            print("==========================")
+            s_dist = Counter(state_labels)
+            for label, count in sorted(s_dist.items()):
+                percentage = (count / len(state_labels)) * 100
+                print(f"{state_names[label]}: {count} samples ({percentage:.2f}%)")
+            
+            return s_dist
 
     def create_splits(self, dataset):
-        """Create stratified splits considering both labels."""
+        """Create stratified splits considering labeling mode."""
         # First analyze distribution
-        v_dist, a_dist = self.analyze_class_distribution(dataset)
-        
-        # Create combined labels for stratification
-        combined_labels = []
-        for _, valence, arousal in dataset:
-            # Create a combined label that preserves both distributions
-            combined_label = valence.item() * 3 + arousal.item()  # Assuming 3 classes each
-            combined_labels.append(combined_label)
+        if self.labeling_mode == 'dual':
+            v_dist, a_dist = self.analyze_class_distribution(dataset)
+            
+            # Create combined labels for stratification
+            combined_labels = []
+            for _, valence, arousal in dataset:
+                # Create a combined label that preserves both distributions
+                combined_label = valence.item() * 3 + arousal.item()
+                combined_labels.append(combined_label)
+        else:
+            s_dist = self.analyze_class_distribution(dataset)
+            
+            # Get state labels directly
+            combined_labels = []
+            for _, state in dataset:
+                combined_labels.append(state.item())
         
         combined_labels = np.array(combined_labels)
         
@@ -144,49 +168,75 @@ class CrossValidator:
         
         self.splits = []
         for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(dataset)), combined_labels)):
-            # Analyze fold distribution
-            train_v_dist = Counter([dataset[i][1].item() for i in train_idx])
-            train_a_dist = Counter([dataset[i][2].item() for i in val_idx])
-            val_v_dist = Counter([dataset[i][1].item() for i in val_idx])
-            val_a_dist = Counter([dataset[i][2].item() for i in val_idx])
-            """
-            print(f"\nFold {fold} Distribution:")
-            print("=====================")
-            print("\nTraining Set:")
-            print("Valence:", {k: f"{v} ({v/len(train_idx)*100:.2f}%)" for k, v in train_v_dist.items()})
-            print("Arousal:", {k: f"{v} ({v/len(train_idx)*100:.2f}%)" for k, v in train_a_dist.items()})
-            print("\nValidation Set:")
-            print("Valence:", {k: f"{v} ({v/len(val_idx)*100:.2f}%)" for k, v in val_v_dist.items()})
-            print("Arousal:", {k: f"{v} ({v/len(val_idx)*100:.2f}%)" for k, v in val_a_dist.items()})
-            """
-            self.splits.append({
-                'train_indices': train_idx,
-                'val_indices': val_idx,
-                'train_stats': {
-                    'valence': train_v_dist,
-                    'arousal': train_a_dist
-                },
-                'val_stats': {
-                    'valence': val_v_dist,
-                    'arousal': val_a_dist
+            if self.labeling_mode == 'dual':
+                # Analyze fold distribution for dual-head
+                train_v_dist = Counter([dataset[i][1].item() for i in train_idx])
+                train_a_dist = Counter([dataset[i][2].item() for i in train_idx])
+                val_v_dist = Counter([dataset[i][1].item() for i in val_idx])
+                val_a_dist = Counter([dataset[i][2].item() for i in val_idx])
+                
+                split_info = {
+                    'train_indices': train_idx,
+                    'val_indices': val_idx,
+                    'train_stats': {
+                        'valence': train_v_dist,
+                        'arousal': train_a_dist
+                    },
+                    'val_stats': {
+                        'valence': val_v_dist,
+                        'arousal': val_a_dist
+                    }
                 }
-            })
-        
-        # Check for problematic splits
-        min_samples_per_class = 3  # Set minimum acceptable number of samples
-        for fold, split in enumerate(self.splits):
-            for label_type in ['valence', 'arousal']:
-                for class_idx in range(3):  # Assuming 3 classes
-                    train_count = split['train_stats'][label_type].get(class_idx, 0)
-                    val_count = split['val_stats'][label_type].get(class_idx, 0)
-                    
-                    if train_count < min_samples_per_class or val_count < min_samples_per_class:
-                        print(f"\nWARNING: Fold {fold} has low representation for {label_type} class {class_idx}")
-                        print(f"Training samples: {train_count}")
-                        print(f"Validation samples: {val_count}")
+            else:
+                # Analyze fold distribution for state classification
+                train_s_dist = Counter([dataset[i][1].item() for i in train_idx])
+                val_s_dist = Counter([dataset[i][1].item() for i in val_idx])
+                
+                split_info = {
+                    'train_indices': train_idx,
+                    'val_indices': val_idx,
+                    'train_stats': {
+                        'state': train_s_dist
+                    },
+                    'val_stats': {
+                        'state': val_s_dist
+                    }
+                }
+            
+            self.splits.append(split_info)
+            
+            # Check for problematic splits
+            self._check_split_distribution(split_info, fold)
         
         return self.splits
-
+    
+    def _check_split_distribution(self, split_info: dict, fold: int):
+        """Check for problematic class distributions in splits."""
+        min_samples_per_class = 3
+        
+        if self.labeling_mode == 'dual':
+            for label_type in ['valence', 'arousal']:
+                for class_idx in range(3):
+                    train_count = split_info['train_stats'][label_type].get(class_idx, 0)
+                    val_count = split_info['val_stats'][label_type].get(class_idx, 0)
+                    
+                    if train_count < min_samples_per_class or val_count < min_samples_per_class:
+                        self.logger.warning(
+                            f"Fold {fold} has low representation for {label_type} "
+                            f"class {class_idx} (train: {train_count}, val: {val_count})"
+                        )
+        else:
+            state_names = ['HANV', 'MAMV', 'LAPV', 'LANV']
+            for class_idx in range(4):
+                train_count = split_info['train_stats']['state'].get(class_idx, 0)
+                val_count = split_info['val_stats']['state'].get(class_idx, 0)
+                
+                if train_count < min_samples_per_class or val_count < min_samples_per_class:
+                    self.logger.warning(
+                        f"Fold {fold} has low representation for state "
+                        f"{state_names[class_idx]} (train: {train_count}, val: {val_count})"
+                    )
+                        
     def _save_splits(self):
         """Save split information to disk."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -195,14 +245,34 @@ class CrossValidator:
         splits_data = []
         for split in self.splits:
             split_dict = {
-                'fold_number': split.fold_number,
-                'train_indices': split.train_indices.tolist(),
-                'val_indices': split.val_indices.tolist(),
-                'train_valence_dist': split.train_valence_dist,
-                'train_arousal_dist': split.train_arousal_dist,
-                'val_valence_dist': split.val_valence_dist,
-                'val_arousal_dist': split.val_arousal_dist
+                'train_indices': split['train_indices'].tolist(),
+                'val_indices': split['val_indices'].tolist(),
+                'labeling_mode': self.labeling_mode,
             }
+            
+            # Add mode-specific distribution information
+            if self.labeling_mode == 'dual':
+                split_dict.update({
+                    'train_stats': {
+                        'valence': dict(split['train_stats']['valence']),
+                        'arousal': dict(split['train_stats']['arousal'])
+                    },
+                    'val_stats': {
+                        'valence': dict(split['val_stats']['valence']),
+                        'arousal': dict(split['val_stats']['arousal'])
+                    }
+                })
+            else:
+                state_names = ['HANV', 'MAMV', 'LAPV', 'LANV']
+                split_dict.update({
+                    'train_stats': {
+                        'state': {state_names[k]: v for k, v in split['train_stats']['state'].items()}
+                    },
+                    'val_stats': {
+                        'state': {state_names[k]: v for k, v in split['val_stats']['state'].items()}
+                    }
+                })
+            
             splits_data.append(split_dict)
         
         with open(save_path, 'w') as f:
@@ -210,10 +280,12 @@ class CrossValidator:
                 'n_splits': self.n_splits,
                 'shuffle': self.shuffle,
                 'random_state': self.random_state,
+                'labeling_mode': self.labeling_mode,
                 'splits': splits_data
             }, f, indent=2)
         
         self.logger.info(f"Saved split information to {save_path}")
+        return save_path
 
     def get_fold_dataloaders(
         self,
@@ -222,18 +294,7 @@ class CrossValidator:
         batch_size: int,
         num_workers: int = 2
     ) -> Tuple[DataLoader, DataLoader]:
-        """
-        Get train and validation dataloaders for a specific fold.
-        
-        Args:
-            dataset: The full dataset
-            fold: Fold number
-            batch_size: Batch size for dataloaders
-            num_workers: Number of workers for data loading
-            
-        Returns:
-            Tuple of (train_dataloader, val_dataloader)
-        """
+        """Get train and validation dataloaders for a specific fold."""
         if not self.splits:
             raise ValueError("No splits found. Run create_splits first.")
         
@@ -242,8 +303,8 @@ class CrossValidator:
         
         split_info = self.splits[fold]
         
-        train_dataset = Subset(dataset, self.splits[fold]["train_indices"])
-        val_dataset = Subset(dataset, self.splits[fold]["val_indices"])
+        train_dataset = Subset(dataset, split_info['train_indices'])
+        val_dataset = Subset(dataset, split_info['val_indices'])
         
         train_loader = DataLoader(
             train_dataset,
@@ -261,8 +322,57 @@ class CrossValidator:
             pin_memory=True
         )
         
+        # Log distribution information
+        self._log_fold_distribution(split_info, fold)
+        
         return train_loader, val_loader
 
+    def _log_fold_distribution(self, split_info: dict, fold: int):
+        """Log class distribution information for the fold."""
+        if self.labeling_mode == 'dual':
+            self.logger.info(f"\nFold {fold} Distribution:")
+            self.logger.info("Training Set:")
+            self.logger.info(f"Valence: {dict(split_info['train_stats']['valence'])}")
+            self.logger.info(f"Arousal: {dict(split_info['train_stats']['arousal'])}")
+            self.logger.info("Validation Set:")
+            self.logger.info(f"Valence: {dict(split_info['val_stats']['valence'])}")
+            self.logger.info(f"Arousal: {dict(split_info['val_stats']['arousal'])}")
+        else:
+            state_names = ['HANV', 'MAMV', 'LAPV', 'LANV']
+            self.logger.info(f"\nFold {fold} State Distribution:")
+            self.logger.info("Training Set:")
+            for class_idx, count in split_info['train_stats']['state'].items():
+                self.logger.info(f"{state_names[class_idx]}: {count}")
+            self.logger.info("Validation Set:")
+            for class_idx, count in split_info['val_stats']['state'].items():
+                self.logger.info(f"{state_names[class_idx]}: {count}")
+                
+    def load_splits(self, splits_file: str):
+        """Load previously saved splits."""
+        with open(splits_file, 'r') as f:
+            data = json.load(f)
+        
+        # Verify compatibility
+        if data['labeling_mode'] != self.labeling_mode:
+            raise ValueError(
+                f"Incompatible labeling mode in saved splits "
+                f"(saved: {data['labeling_mode']}, current: {self.labeling_mode})"
+            )
+        
+        # Convert lists back to numpy arrays
+        self.splits = []
+        for split in data['splits']:
+            split['train_indices'] = np.array(split['train_indices'])
+            split['val_indices'] = np.array(split['val_indices'])
+            self.splits.append(split)
+        
+        self.n_splits = data['n_splits']
+        self.shuffle = data['shuffle']
+        self.random_state = data['random_state']
+        
+        self.logger.info(f"Loaded {len(self.splits)} splits from {splits_file}")
+        return self.splits
+    
 # Example usage
 if __name__ == "__main__":
     # Assuming we have our dataset

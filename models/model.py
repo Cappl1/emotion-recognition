@@ -21,19 +21,21 @@ class PositionalEncoding(nn.Module):
 class HierarchicalEmotionModel(nn.Module):
     def __init__(
         self,
-        input_dim=6,           # 3 features * 2 eyes
+        input_dim=6,
         lstm_hidden_dim=128,
         lstm_layers=2,
         lstm_dropout=0.1,
-        window_size=100,       # Size of segments to process with LSTM
-        d_model=128,          # Transformer dimension
+        window_size=100,
+        d_model=128,
         nhead=8,
         num_transformer_layers=2,
         dim_feedforward=512,
         transformer_dropout=0.1,
-        num_classes=3
+        num_classes=3,
+        labeling_mode='dual'
     ):
         super().__init__()
+        self.labeling_mode = labeling_mode
         
         self.window_size = window_size
         self.lstm_hidden_dim = lstm_hidden_dim
@@ -75,20 +77,29 @@ class HierarchicalEmotionModel(nn.Module):
         )
         
         # Classification heads
-        self.valence_head = nn.Sequential(
-            nn.Linear(d_model, dim_feedforward),
-            nn.ReLU(),
-            nn.Dropout(transformer_dropout),
-            nn.Linear(dim_feedforward, num_classes)
-        )
-        
-        self.arousal_head = nn.Sequential(
-            nn.Linear(d_model, dim_feedforward),
-            nn.ReLU(),
-            nn.Dropout(transformer_dropout),
-            nn.Linear(dim_feedforward, num_classes)
-        )
-        
+        if labeling_mode == 'dual':
+            # Dual-head for valence and arousal
+            self.valence_head = nn.Sequential(
+                nn.Linear(d_model, dim_feedforward),
+                nn.ReLU(),
+                nn.Dropout(transformer_dropout),
+                nn.Linear(dim_feedforward, num_classes)
+            )
+            
+            self.arousal_head = nn.Sequential(
+                nn.Linear(d_model, dim_feedforward),
+                nn.ReLU(),
+                nn.Dropout(transformer_dropout),
+                nn.Linear(dim_feedforward, num_classes)
+            )
+        else:
+            # Single head for state classification
+            self.state_head = nn.Sequential(
+                nn.Linear(d_model, dim_feedforward),
+                nn.ReLU(),
+                nn.Dropout(transformer_dropout),
+                nn.Linear(dim_feedforward, 4)  # 4 classes for states
+            )
         self._init_weights()
     
     def _init_weights(self):
@@ -160,8 +171,10 @@ class HierarchicalEmotionModel(nn.Module):
         attention_weights = torch.softmax(attention_weights, dim=1)
         attended = torch.sum(attention_weights * transformer_out, dim=1)  # [batch, d_model]
         
-        # Get predictions from both heads
-        valence_logits = self.valence_head(attended)
-        arousal_logits = self.arousal_head(attended)
-        
-        return valence_logits, arousal_logits
+        if self.labeling_mode == 'dual':
+            valence_logits = self.valence_head(attended)
+            arousal_logits = self.arousal_head(attended)
+            return valence_logits, arousal_logits
+        else:
+            state_logits = self.state_head(attended)
+            return state_logits

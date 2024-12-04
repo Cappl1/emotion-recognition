@@ -14,11 +14,12 @@ class DataConfig:
     """Configuration for dataset and data processing."""
     base_path: str
     window_size: int = 100
-    max_seq_length: int = 512
+    max_seq_length: int = 30000
     confidence_threshold: float = 0.8
-    batch_size: int = 32
+    batch_size: int = 16
     num_workers: int = 2
     pin_memory: bool = True
+    labeling_mode: str = 'state'  # 'dual' or 'state'
 
 @dataclass
 class ModelConfig:
@@ -32,7 +33,9 @@ class ModelConfig:
     num_transformer_layers: int = 2
     dim_feedforward: int = 512
     transformer_dropout: float = 0.1
-    num_classes: int = 3
+    num_classes: int = 3  # For dual mode: 3, for state mode: 4
+    labeling_mode: str = 'dual'  # 'dual' or 'state'
+
 
 @dataclass
 class TrainingConfig:
