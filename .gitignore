@@ -37,6 +37,7 @@ ENV/
 configs/
 validation_results/
 preprocessed_data/
+models/
 cv_results/
 *.log
 *.pkl
