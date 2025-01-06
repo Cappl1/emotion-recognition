@@ -1,5 +1,4 @@
-# Create README.md
-cat << EOF > README.md
+
 # Emotion Recognition from Eye-tracking Data
 
 Deep learning model for emotion recognition using eye-tracking data. Uses a hierarchical architecture combining LSTM and Transformer components.
